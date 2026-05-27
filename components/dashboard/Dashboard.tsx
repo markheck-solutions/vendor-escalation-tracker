@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { DashboardMetrics, DeliveryDto } from "@/lib/dashboard/metrics";
 import {
@@ -10,6 +11,11 @@ import {
   type DeliveryFilters,
   type DeliverySortKey,
 } from "@/lib/dashboard/queue";
+import {
+  buildDashboardUrlSearchParams,
+  parseDashboardUrlState,
+  type DashboardUrlState,
+} from "@/lib/dashboard/url-state";
 import { diffUtcDays } from "@/lib/risk/time";
 import { DeliveryDetailDrawer } from "@/components/detail/DeliveryDetailDrawer";
 
@@ -267,12 +273,51 @@ export function Dashboard() {
   const [metrics, setMetrics] = useState<LoadState<DashboardMetrics>>({ state: "loading" });
   const [deliveries, setDeliveries] = useState<LoadState<DeliveryDto[]>>({ state: "loading" });
 
-  const [sortKey, setSortKey] = useState<DeliverySortKey>("priority");
-  const [filters, setFilters] = useState<DeliveryFilters>(DEFAULT_DELIVERY_FILTERS);
-  const [detailDeliveryId, setDetailDeliveryId] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const urlState = useMemo(() => parseDashboardUrlState(searchParams), [searchParams]);
+
+  const [sortKey, setSortKey] = useState<DeliverySortKey>(urlState.sortKey);
+  const [filters, setFilters] = useState<DeliveryFilters>(urlState.filters);
+  const [detailDeliveryId, setDetailDeliveryId] = useState<string | null>(
+    urlState.detailDeliveryId,
+  );
+
   const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const detailOpenedByClickRef = useRef(false);
 
   const now = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    // Sync URL-driven state into local state so sequential control updates don't race router navigation.
+    // (Example: selecting sort then filter should not drop the first change.)
+    queueMicrotask(() => {
+      setSortKey(urlState.sortKey);
+      setFilters(urlState.filters);
+      setDetailDeliveryId(urlState.detailDeliveryId);
+      if (!urlState.detailDeliveryId) {
+        // Clear click-origin tracking when the drawer is closed via browser navigation.
+        detailOpenedByClickRef.current = false;
+      }
+    });
+  }, [urlState.detailDeliveryId, urlState.filters, urlState.sortKey]);
+
+  const updateUrlState = useCallback(
+    (next: DashboardUrlState, mode: "push" | "replace") => {
+      const params = buildDashboardUrlSearchParams(next);
+      const qs = params.toString();
+      const href = qs ? `${pathname}?${qs}` : pathname;
+      if (mode === "push") router.push(href, { scroll: false });
+      else router.replace(href, { scroll: false });
+    },
+    [pathname, router],
+  );
+
+  const currentUrlState = useMemo((): DashboardUrlState => {
+    return { sortKey, filters, detailDeliveryId };
+  }, [detailDeliveryId, filters, sortKey]);
 
   const loadMetrics = useCallback(async () => {
     setMetrics({ state: "loading" });
@@ -351,26 +396,59 @@ export function Dashboard() {
 
   const clearFilters = useCallback(() => {
     setFilters(DEFAULT_DELIVERY_FILTERS);
-  }, []);
+    updateUrlState(
+      { ...currentUrlState, filters: DEFAULT_DELIVERY_FILTERS },
+      "replace",
+    );
+  }, [currentUrlState, updateUrlState]);
 
   const resetAllControls = useCallback(() => {
     setSortKey("priority");
     setFilters(DEFAULT_DELIVERY_FILTERS);
-  }, []);
+    updateUrlState(
+      { sortKey: "priority", filters: DEFAULT_DELIVERY_FILTERS, detailDeliveryId },
+      "replace",
+    );
+  }, [detailDeliveryId, updateUrlState]);
 
   const openDetail = useCallback((deliveryId: string, trigger: HTMLButtonElement) => {
     detailTriggerRef.current = trigger;
+    detailOpenedByClickRef.current = true;
     setDetailDeliveryId(deliveryId);
-  }, []);
+    updateUrlState({ ...currentUrlState, detailDeliveryId: deliveryId }, "push");
+  }, [currentUrlState, updateUrlState]);
 
   const closeDetail = useCallback(() => {
-    setDetailDeliveryId(null);
+    if (detailOpenedByClickRef.current) {
+      detailOpenedByClickRef.current = false;
+      // Prefer history back so browser forward can restore the drawer state, but only when
+      // there is an in-app history entry to go back to.
+      if (window.history.state?.idx && window.history.state.idx > 0) {
+        router.back();
+      } else {
+        setDetailDeliveryId(null);
+        updateUrlState({ ...currentUrlState, detailDeliveryId: null }, "replace");
+      }
+    } else {
+      setDetailDeliveryId(null);
+      updateUrlState({ ...currentUrlState, detailDeliveryId: null }, "replace");
+    }
     const trigger = detailTriggerRef.current;
     detailTriggerRef.current = null;
     // Restore focus after the drawer unmounts. Use a macrotask so pointer-driven closes
     // (like clicking the backdrop) don't immediately lose focus to the subsequent click.
     setTimeout(() => trigger?.focus(), 0);
-  }, []);
+  }, [currentUrlState, router, updateUrlState]);
+
+  useEffect(() => {
+    // If the drawer closes due to browser navigation (back/forward), restore focus to the
+    // originating trigger when available.
+    if (detailDeliveryId !== null) return;
+    const trigger = detailTriggerRef.current;
+    if (!trigger) return;
+    detailTriggerRef.current = null;
+    setTimeout(() => trigger.focus(), 0);
+  }, [detailDeliveryId]);
 
   const deliveriesCount =
     deliveries.state === "success" ? deliveries.data.length : metrics.state === "success" ? metrics.data.totalDeliveries : null;
@@ -451,7 +529,11 @@ export function Dashboard() {
                 <select
                   id="dashboard-sort"
                   value={sortKey}
-                  onChange={(e) => setSortKey(e.target.value as DeliverySortKey)}
+                  onChange={(e) => {
+                    const next = e.target.value as DeliverySortKey;
+                    setSortKey(next);
+                    updateUrlState({ ...currentUrlState, sortKey: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >
@@ -472,12 +554,14 @@ export function Dashboard() {
                 <select
                   id="dashboard-filter-risk"
                   value={filters.riskLevel}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const next: DeliveryFilters = {
+                      ...filters,
                       riskLevel: e.target.value as DeliveryFilters["riskLevel"],
-                    }))
-                  }
+                    };
+                    setFilters(next);
+                    updateUrlState({ ...currentUrlState, filters: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >
@@ -499,12 +583,14 @@ export function Dashboard() {
                 <select
                   id="dashboard-filter-status"
                   value={filters.status}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const next: DeliveryFilters = {
+                      ...filters,
                       status: e.target.value as DeliveryFilters["status"],
-                    }))
-                  }
+                    };
+                    setFilters(next);
+                    updateUrlState({ ...currentUrlState, filters: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >
@@ -526,12 +612,14 @@ export function Dashboard() {
                 <select
                   id="dashboard-filter-stale"
                   value={filters.staleFollowUp}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const next: DeliveryFilters = {
+                      ...filters,
                       staleFollowUp: e.target.value as DeliveryFilters["staleFollowUp"],
-                    }))
-                  }
+                    };
+                    setFilters(next);
+                    updateUrlState({ ...currentUrlState, filters: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >
@@ -551,12 +639,14 @@ export function Dashboard() {
                 <select
                   id="dashboard-filter-market"
                   value={filters.market}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const next: DeliveryFilters = {
+                      ...filters,
                       market: e.target.value as DeliveryFilters["market"],
-                    }))
-                  }
+                    };
+                    setFilters(next);
+                    updateUrlState({ ...currentUrlState, filters: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >
@@ -579,12 +669,14 @@ export function Dashboard() {
                 <select
                   id="dashboard-filter-blocker"
                   value={filters.blocker}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const next: DeliveryFilters = {
+                      ...filters,
                       blocker: e.target.value as DeliveryFilters["blocker"],
-                    }))
-                  }
+                    };
+                    setFilters(next);
+                    updateUrlState({ ...currentUrlState, filters: next }, "replace");
+                  }}
                   disabled={!deliveriesAvailable}
                   className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                 >

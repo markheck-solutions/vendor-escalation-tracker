@@ -1,5 +1,6 @@
 import { DemoModeBadge } from "@/components/demo/DemoModeBadge";
 import { Dashboard } from "@/components/dashboard/Dashboard";
+import { Suspense } from "react";
 
 export default function Home() {
   return (
@@ -18,7 +19,9 @@ export default function Home() {
           <DemoModeBadge />
         </header>
 
-        <Dashboard />
+        <Suspense fallback={<div className="text-sm text-zinc-600 dark:text-zinc-400">Loading dashboard…</div>}>
+          <Dashboard />
+        </Suspense>
       </main>
     </div>
   );
