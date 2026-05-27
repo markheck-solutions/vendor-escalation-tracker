@@ -6,10 +6,14 @@ const PublicEnvSchema = z.object({
     .enum(["true", "false"])
     .optional()
     .default("true"),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().optional().default(""),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional().default(""),
 });
 
 export type PublicEnv = z.infer<typeof PublicEnvSchema>;
 
-export function getPublicEnv(env: NodeJS.ProcessEnv = process.env): PublicEnv {
+export function getPublicEnv(
+  env: Record<string, string | undefined> = process.env,
+): PublicEnv {
   return PublicEnvSchema.parse(env);
 }

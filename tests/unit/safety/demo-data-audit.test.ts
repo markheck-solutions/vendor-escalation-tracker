@@ -18,6 +18,25 @@ describe("auditDemoText", () => {
     expect(findings.some((f) => f.kind === "url")).toBe(true);
   });
 
+  it("flags private or local URLs distinctly", () => {
+    const findings = auditDemoText("Check http://localhost:3000/health before proceeding.");
+    expect(findings.some((f) => f.kind === "private-url")).toBe(true);
+    expect(findings.some((f) => f.kind === "url")).toBe(false);
+  });
+
+  it("flags secret-looking values (token-like / sk-like)", () => {
+    const findings = auditDemoText(
+      "Use sk-abcdefghijklmnopqrstuvwxyz1234567890 and eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+    );
+    expect(findings.some((f) => f.kind === "sk-like")).toBe(true);
+    expect(findings.some((f) => f.kind === "token-like")).toBe(true);
+  });
+
+  it("flags contact-like person names in text", () => {
+    const findings = auditDemoText("Contact: Jane Doe to coordinate access.");
+    expect(findings.some((f) => f.kind === "unsafe-name")).toBe(true);
+  });
+
   it("does not flag normal demo-safe text", () => {
     const findings = auditDemoText("Vendor follow-up is pending. Next action is status request.");
     expect(findings).toHaveLength(0);
