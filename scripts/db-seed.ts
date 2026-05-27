@@ -1,6 +1,11 @@
 import { SEED_DELIVERIES } from "../lib/data/seed";
+import { loadLocalEnv } from "../lib/env/load-local-env";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 async function main() {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  loadLocalEnv({ cwd: repoRoot });
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
     throw new Error(
