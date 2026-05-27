@@ -1,6 +1,8 @@
 import { jsonError, jsonMethodNotAllowed } from "@/lib/api/responses";
 import { getDeliveryRepository } from "@/lib/data/repository-factory";
 import type { DeliveryRow } from "@/lib/data/schema";
+import { getFollowUpHistoryForDelivery } from "@/lib/detail/follow-up-history";
+import { buildRiskExplanation } from "@/lib/detail/risk-explanation";
 import { isStaleFollowUp } from "@/lib/risk/stale-follow-up";
 
 export const runtime = "nodejs";
@@ -11,6 +13,20 @@ function isValidId(id: string): boolean {
 }
 
 function toDeliveryDto(row: DeliveryRow) {
+  const followUpHistory = getFollowUpHistoryForDelivery({
+    deliveryId: row.id,
+    lastVendorTouchDate: row.lastVendorTouchDate,
+  });
+
+  const riskExplanation = buildRiskExplanation({
+    riskLevel: row.riskLevel,
+    status: row.status,
+    revenueExposureUsd: row.revenueExposureUsd,
+    dueDate: row.dueDate,
+    lastVendorTouchDate: row.lastVendorTouchDate,
+    history: followUpHistory,
+  });
+
   return {
     id: row.id,
     customerAlias: row.customerAlias,
@@ -26,6 +42,8 @@ function toDeliveryDto(row: DeliveryRow) {
     blocker: row.blocker,
     ownerAlias: row.ownerAlias,
     nextAction: row.nextAction,
+    followUpHistory,
+    riskExplanation,
   };
 }
 

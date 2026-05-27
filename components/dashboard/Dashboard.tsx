@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DashboardMetrics, DeliveryDto } from "@/lib/dashboard/metrics";
 import {
@@ -11,6 +11,7 @@ import {
   type DeliverySortKey,
 } from "@/lib/dashboard/queue";
 import { diffUtcDays } from "@/lib/risk/time";
+import { DeliveryDetailDrawer } from "@/components/detail/DeliveryDetailDrawer";
 
 type LoadState<T> =
   | { state: "loading" }
@@ -143,8 +144,12 @@ function QueueError(props: { message: string; onRetry: () => void }) {
   );
 }
 
-function QueueCard(props: { delivery: DeliveryDto; now: Date }) {
-  const { delivery, now } = props;
+function QueueCard(props: {
+  delivery: DeliveryDto;
+  now: Date;
+  onViewDetails: (trigger: HTMLButtonElement) => void;
+}) {
+  const { delivery, now, onViewDetails } = props;
   const risk = riskTone(delivery.riskLevel);
   const status = statusTone(delivery.status);
 
@@ -203,6 +208,18 @@ function QueueCard(props: { delivery: DeliveryDto; now: Date }) {
         </div>
       </header>
 
+      <div className="mt-3 flex flex-wrap items-center justify-start gap-2">
+        <button
+          type="button"
+          onClick={(e) => onViewDetails(e.currentTarget)}
+          className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+          aria-label={`View details for ${delivery.serviceAlias} in ${delivery.market} (${delivery.vendorAlias})`}
+        >
+          View details
+        </button>
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">ID: {delivery.id}</span>
+      </div>
+
       <dl className="mt-3 grid grid-cols-2 gap-3 text-xs text-zinc-700 dark:text-zinc-300 sm:grid-cols-4">
         <div>
           <dt className="text-zinc-500 dark:text-zinc-500">Exposure</dt>
@@ -252,6 +269,8 @@ export function Dashboard() {
 
   const [sortKey, setSortKey] = useState<DeliverySortKey>("priority");
   const [filters, setFilters] = useState<DeliveryFilters>(DEFAULT_DELIVERY_FILTERS);
+  const [detailDeliveryId, setDetailDeliveryId] = useState<string | null>(null);
+  const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const now = useMemo(() => new Date(), []);
 
@@ -337,6 +356,18 @@ export function Dashboard() {
   const resetAllControls = useCallback(() => {
     setSortKey("priority");
     setFilters(DEFAULT_DELIVERY_FILTERS);
+  }, []);
+
+  const openDetail = useCallback((deliveryId: string, trigger: HTMLButtonElement) => {
+    detailTriggerRef.current = trigger;
+    setDetailDeliveryId(deliveryId);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setDetailDeliveryId(null);
+    const trigger = detailTriggerRef.current;
+    detailTriggerRef.current = null;
+    queueMicrotask(() => trigger?.focus());
   }, []);
 
   const deliveriesCount =
@@ -648,13 +679,24 @@ export function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {filteredDeliveries.map((d) => (
-                  <QueueCard key={d.id} delivery={d} now={now} />
+                  <QueueCard
+                    key={d.id}
+                    delivery={d}
+                    now={now}
+                    onViewDetails={(trigger) => openDetail(d.id, trigger)}
+                  />
                 ))}
               </div>
             )
           ) : null}
         </div>
       </section>
+
+      <DeliveryDetailDrawer
+        open={detailDeliveryId !== null}
+        deliveryId={detailDeliveryId}
+        onClose={closeDetail}
+      />
     </div>
   );
 }

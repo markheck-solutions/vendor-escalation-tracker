@@ -55,6 +55,9 @@ describe("/api/deliveries/[id]", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.delivery?.id).toBe("deliv_0001");
+    expect(Array.isArray(body.delivery?.followUpHistory)).toBe(true);
+    expect(typeof body.delivery?.riskExplanation?.headline).toBe("string");
+    expect(Array.isArray(body.delivery?.riskExplanation?.reasons)).toBe(true);
   });
 
   it("fails safely for malformed ids", async () => {
