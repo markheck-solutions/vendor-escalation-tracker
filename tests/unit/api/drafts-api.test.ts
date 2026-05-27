@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import http from "node:http";
 
-import { POST as postDrafts } from "@/app/api/drafts/route";
+import { DELETE, GET, PATCH, POST as postDrafts, PUT } from "@/app/api/drafts/route";
 import { GET as getDeliveryDetail } from "@/app/api/deliveries/[id]/route";
 import { getDeliveryRepository } from "@/lib/data/repository-factory";
 
@@ -65,6 +65,22 @@ describe("/api/drafts", () => {
 
     expect(body2).toEqual(body1);
     expect(body1.draft?.draftText).toContain("Subject:");
+  });
+
+  it("rejects unsupported methods with controlled 405 JSON", async () => {
+    const res = await GET();
+    expect(res.status).toBe(405);
+    const body = await res.json();
+    expect(body.error?.code).toBe("method_not_allowed");
+
+    const res2 = await PUT();
+    expect(res2.status).toBe(405);
+
+    const res3 = await PATCH();
+    expect(res3.status).toBe(405);
+
+    const res4 = await DELETE();
+    expect(res4.status).toBe(405);
   });
 
   it("honors draft type and tone in the generated text", async () => {
