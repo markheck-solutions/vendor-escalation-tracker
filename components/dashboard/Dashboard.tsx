@@ -3,12 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { DashboardMetrics, DeliveryDto } from "@/lib/dashboard/metrics";
+import {
+  DEFAULT_DELIVERY_FILTERS,
+  applyDeliveryFilters,
+  sortDeliveries,
+  type DeliveryFilters,
+  type DeliverySortKey,
+} from "@/lib/dashboard/queue";
 import { diffUtcDays } from "@/lib/risk/time";
 
 type LoadState<T> =
   | { state: "loading" }
   | { state: "success"; data: T }
   | { state: "error"; message: string };
+
+const EMPTY_DELIVERIES: DeliveryDto[] = [];
 
 function formatUsdCompact(value: number): string {
   const abs = Math.abs(value);
@@ -241,6 +250,9 @@ export function Dashboard() {
   const [metrics, setMetrics] = useState<LoadState<DashboardMetrics>>({ state: "loading" });
   const [deliveries, setDeliveries] = useState<LoadState<DeliveryDto[]>>({ state: "loading" });
 
+  const [sortKey, setSortKey] = useState<DeliverySortKey>("priority");
+  const [filters, setFilters] = useState<DeliveryFilters>(DEFAULT_DELIVERY_FILTERS);
+
   const now = useMemo(() => new Date(), []);
 
   const loadMetrics = useCallback(async () => {
@@ -280,6 +292,52 @@ export function Dashboard() {
 
   const metricsLoading = metrics.state === "loading";
   const metricsError = metrics.state === "error" ? metrics.message : undefined;
+
+  const deliveriesAvailable = deliveries.state === "success";
+  const deliveriesLoading = deliveries.state === "loading";
+
+  const allDeliveries = deliveriesAvailable ? deliveries.data : EMPTY_DELIVERIES;
+
+  const filteredDeliveries = useMemo(() => {
+    if (!deliveriesAvailable) return [];
+    const filtered = applyDeliveryFilters(allDeliveries, filters);
+    return sortDeliveries(filtered, sortKey);
+  }, [allDeliveries, deliveriesAvailable, filters, sortKey]);
+
+  const marketOptions = useMemo(() => {
+    if (!deliveriesAvailable) return [];
+    return Array.from(new Set(allDeliveries.map((d) => d.market))).sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [allDeliveries, deliveriesAvailable]);
+
+  const blockerOptions = useMemo(() => {
+    if (!deliveriesAvailable) return [];
+    return Array.from(new Set(allDeliveries.map((d) => d.blocker))).sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [allDeliveries, deliveriesAvailable]);
+
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (filters.riskLevel !== "all") labels.push(`Risk: ${filters.riskLevel}`);
+    if (filters.status !== "all") labels.push(`Status: ${filters.status}`);
+    if (filters.market !== "all") labels.push(`Market: ${filters.market}`);
+    if (filters.blocker !== "all") labels.push(`Blocker: ${filters.blocker}`);
+    if (filters.staleFollowUp !== "all") {
+      labels.push(filters.staleFollowUp === "stale" ? "Stale follow-up: yes" : "Stale follow-up: no");
+    }
+    return labels;
+  }, [filters]);
+
+  const clearFilters = useCallback(() => {
+    setFilters(DEFAULT_DELIVERY_FILTERS);
+  }, []);
+
+  const resetAllControls = useCallback(() => {
+    setSortKey("priority");
+    setFilters(DEFAULT_DELIVERY_FILTERS);
+  }, []);
 
   const deliveriesCount =
     deliveries.state === "success" ? deliveries.data.length : metrics.state === "success" ? metrics.data.totalDeliveries : null;
@@ -332,16 +390,222 @@ export function Dashboard() {
       </section>
 
       <section aria-label="Priority queue" className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Priority queue</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Highest risk first. Use this as your next-call list for vendor follow-ups and escalations.
             </p>
           </div>
-          <div className="text-xs text-zinc-500 dark:text-zinc-500">
-            {deliveries.state === "success" ? (
-              <span className="tabular-nums">{deliveries.data.length} items</span>
+
+          <div className="flex flex-col gap-3 sm:items-end">
+            <div className="text-xs text-zinc-500 dark:text-zinc-500" aria-live="polite">
+              {deliveriesAvailable ? (
+                <span className="tabular-nums">
+                  Showing {filteredDeliveries.length} of {allDeliveries.length}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="lg:col-span-2">
+                <label
+                  htmlFor="dashboard-sort"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Sort
+                </label>
+                <select
+                  id="dashboard-sort"
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as DeliverySortKey)}
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="priority">Priority (risk)</option>
+                  <option value="due_date">Due date (soonest)</option>
+                  <option value="revenue">Revenue exposure (high)</option>
+                  <option value="last_touch">Vendor touch (oldest)</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="dashboard-filter-risk"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Risk
+                </label>
+                <select
+                  id="dashboard-filter-risk"
+                  value={filters.riskLevel}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      riskLevel: e.target.value as DeliveryFilters["riskLevel"],
+                    }))
+                  }
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="all">All</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="dashboard-filter-status"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Status
+                </label>
+                <select
+                  id="dashboard-filter-status"
+                  value={filters.status}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      status: e.target.value as DeliveryFilters["status"],
+                    }))
+                  }
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="all">All</option>
+                  <option value="on-track">On track</option>
+                  <option value="at-risk">At risk</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="escalated">Escalated</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="dashboard-filter-stale"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Stale follow-up
+                </label>
+                <select
+                  id="dashboard-filter-stale"
+                  value={filters.staleFollowUp}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      staleFollowUp: e.target.value as DeliveryFilters["staleFollowUp"],
+                    }))
+                  }
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="all">All</option>
+                  <option value="stale">Stale only</option>
+                  <option value="fresh">Not stale</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="dashboard-filter-market"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Market
+                </label>
+                <select
+                  id="dashboard-filter-market"
+                  value={filters.market}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      market: e.target.value as DeliveryFilters["market"],
+                    }))
+                  }
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="all">All</option>
+                  {marketOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label
+                  htmlFor="dashboard-filter-blocker"
+                  className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Blocker
+                </label>
+                <select
+                  id="dashboard-filter-blocker"
+                  value={filters.blocker}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      blocker: e.target.value as DeliveryFilters["blocker"],
+                    }))
+                  }
+                  disabled={!deliveriesAvailable}
+                  className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                >
+                  <option value="all">All</option>
+                  {blockerOptions.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {deliveriesAvailable ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {activeFilterLabels.length ? (
+                  <div className="flex flex-wrap items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">Active:</span>
+                    {activeFilterLabels.map((label) => (
+                      <span
+                        key={label}
+                        className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-zinc-500 dark:text-zinc-500">No filters applied.</span>
+                )}
+
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    disabled={activeFilterLabels.length === 0}
+                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                  >
+                    Clear filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetAllControls}
+                    disabled={activeFilterLabels.length === 0 && sortKey === "priority"}
+                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            ) : deliveriesLoading ? (
+              <p className="text-xs text-zinc-500 dark:text-zinc-500" aria-live="polite">
+                Loading filters…
+              </p>
             ) : null}
           </div>
         </header>
@@ -352,11 +616,42 @@ export function Dashboard() {
             <QueueError message={deliveries.message} onRetry={loadDeliveries} />
           ) : null}
           {deliveries.state === "success" ? (
-            <div className="space-y-3">
-              {deliveries.data.map((d) => (
-                <QueueCard key={d.id} delivery={d} now={now} />
-              ))}
-            </div>
+            filteredDeliveries.length === 0 ? (
+              <div
+                className="rounded-xl border border-zinc-200 bg-white p-6 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                  No deliveries match your filters.
+                </p>
+                <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+                  Try widening the criteria, or clear filters to return to the full queue.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                  >
+                    Clear filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetAllControls}
+                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredDeliveries.map((d) => (
+                  <QueueCard key={d.id} delivery={d} now={now} />
+                ))}
+              </div>
+            )
           ) : null}
         </div>
       </section>
