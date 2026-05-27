@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vendor Escalation Tracker
 
-## Getting Started
+Vendor follow-ups slip. When they slip, revenue can be exposed, escalations get messy, and people waste time digging through email, spreadsheets, and old notes just to figure out the next move.
 
-Install dependencies:
+This app turns that workflow into a modern risk dashboard. It is a demo-safe portfolio project built to be inspected by a hiring manager and an IT reviewer.
+
+## Live demo
+
+https://vendor-escalation-tracker.vercel.app
+
+## What you can do (public demo)
+
+- View a seeded risk dashboard of fake circuit delivery records
+- Filter and sort a priority queue by risk signals like stale follow-ups and revenue exposure
+- Open a read-only detail panel with a plain-English risk explanation and follow-up history
+- Generate deterministic mock follow-up drafts (copy-only, no send action)
+
+The public demo is intentionally **view-and-draft only**. Visitors cannot edit records, save changes, configure providers, or trigger paid AI usage.
+
+## Local setup
+
+### 1) Install
 
 ```bash
 npm install
 ```
 
-Run the development server:
+### 2) Environment variables
+
+Do not commit secrets. Do not paste secrets into chat logs.
+
+```powershell
+Set-Location 'C:\SoftwareFactory\01-projects\vendor-escalation-tracker'
+Copy-Item '.env.example' '.env.local' -ErrorAction SilentlyContinue
+notepad '.env.local'
+```
+
+Required for local runtime:
+
+- `DATABASE_URL` (server-only)
+- `NEXT_PUBLIC_SUPABASE_URL` (public)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public)
+
+Optional local-only private drafting (server-only, never needed for the public demo):
+
+- `OPENAI_COMPATIBLE_BASE_URL`
+- `OPENAI_COMPATIBLE_API_KEY`
+- `OPENAI_COMPATIBLE_MODEL`
+
+Provider selection:
+
+- `AI_PROVIDER=mock` (default and required for the public demo)
+- `AI_PROVIDER=openai-compatible` (local-only, backend-only)
+
+### 3) Run the dev server
 
 ```bash
 npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
-Open `http://127.0.0.1:3100` in your browser.
+Open: http://127.0.0.1:3100
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validate
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm run test -- --run
+npm run build
+```
 
-## Learn More
+Optional browser tests:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run test:browser
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Handoff notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See `docs/handoff.md` for:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Safe PowerShell setup commands (placeholders only)
+- Deployment notes and how production is kept in Demo Mode + mock AI
+- A quick checklist for verifying local vs deployed parity
