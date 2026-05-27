@@ -1,4 +1,5 @@
 import { DemoModeBadge } from "@/components/demo/DemoModeBadge";
+import { Dashboard } from "@/components/dashboard/Dashboard";
 
 export default function Home() {
   return (
@@ -10,19 +11,14 @@ export default function Home() {
               Vendor Escalation Tracker
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-              Demo-safe dashboard for stale vendor follow-ups, revenue exposure, and
-              next actions.
+              Demo-safe risk dashboard for stale vendor follow-ups, revenue exposure, and
+              the next best action across circuit deliveries.
             </p>
           </div>
           <DemoModeBadge />
         </header>
 
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Scaffold in place. Upcoming slices add seeded fake deliveries, risk scoring,
-            and drafting.
-          </p>
-        </section>
+        <Dashboard />
       </main>
     </div>
   );
