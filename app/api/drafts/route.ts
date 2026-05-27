@@ -1,10 +1,16 @@
 import { z } from "zod";
 
 import { jsonError, jsonMethodNotAllowed } from "@/lib/api/responses";
+import {
+  openaiCompatibleDraftProvider,
+  OpenAICompatibleConfigError,
+  OpenAICompatibleUpstreamError,
+} from "@/lib/ai/openai-compatible-provider";
 import { mockDraftProvider } from "@/lib/ai/mock-provider";
 import type { DraftContext, DraftOptions } from "@/lib/ai/draft-provider";
 import { getDeliveryRepository } from "@/lib/data/repository-factory";
 import type { DeliveryRow } from "@/lib/data/schema";
+import { getServerEnv } from "@/lib/env/server";
 
 export const runtime = "nodejs";
 
@@ -69,7 +75,11 @@ export async function POST(req: Request) {
     }
 
     const context: DraftContext = toDraftContext(delivery);
-    const result = await mockDraftProvider.generateDraft({ context, options });
+    const env = getServerEnv();
+    const provider =
+      env.AI_PROVIDER === "openai-compatible" ? openaiCompatibleDraftProvider : mockDraftProvider;
+
+    const result = await provider.generateDraft({ context, options });
 
     return Response.json({
       draft: {
@@ -78,7 +88,23 @@ export async function POST(req: Request) {
         draftText: result.draftText,
       },
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof OpenAICompatibleConfigError) {
+      return jsonError({
+        status: 500,
+        code: "provider_not_configured",
+        message: "Draft provider is not configured.",
+      });
+    }
+
+    if (err instanceof OpenAICompatibleUpstreamError) {
+      return jsonError({
+        status: 502,
+        code: "provider_error",
+        message: "Draft provider is temporarily unavailable.",
+      });
+    }
+
     return jsonError({
       status: 500,
       code: "internal_error",
