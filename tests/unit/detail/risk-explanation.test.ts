@@ -44,4 +44,20 @@ describe("buildRiskExplanation", () => {
     expect(explanation.headline).toMatch(/high risk/i);
     expect(explanation.reasons[0]).toMatch(/priority/i);
   });
+
+  it("uses non-contradictory wording for scheduled future vendor touches", () => {
+    const explanation = buildRiskExplanation({
+      riskLevel: "normal",
+      status: "on-track",
+      revenueExposureUsd: 8_000,
+      dueDate: utcDate(2026, 7, 20),
+      lastVendorTouchDate: utcDate(2026, 6, 4),
+      history: [],
+      now: utcDate(2026, 6, 1),
+    });
+
+    const scheduled = explanation.reasons.find((r) => /scheduled/i.test(r));
+    expect(scheduled).toBe("Vendor touch is scheduled in 3 days.");
+    expect(scheduled).not.toMatch(/ago/i);
+  });
 });

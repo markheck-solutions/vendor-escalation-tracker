@@ -367,7 +367,9 @@ export function Dashboard() {
     setDetailDeliveryId(null);
     const trigger = detailTriggerRef.current;
     detailTriggerRef.current = null;
-    queueMicrotask(() => trigger?.focus());
+    // Restore focus after the drawer unmounts. Use a macrotask so pointer-driven closes
+    // (like clicking the backdrop) don't immediately lose focus to the subsequent click.
+    setTimeout(() => trigger?.focus(), 0);
   }, []);
 
   const deliveriesCount =

@@ -221,7 +221,7 @@ export function DeliveryDetailDrawer(props: {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/30 backdrop-blur-[1px] pointer-events-none lg:left-auto lg:w-[38rem]"
+      className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/30 backdrop-blur-[1px]"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === overlayRef.current) onClose();

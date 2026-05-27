@@ -53,6 +53,22 @@ test("delivery detail opens, switches records, and closes with keyboard", async 
   await expect(detailButtons.nth(1)).toBeFocused();
 });
 
+test("delivery detail closes when clicking the backdrop", async ({ page }) => {
+  await page.goto("/");
+
+  const detailButtons = page.getByRole("button", { name: /View details for/i });
+  await expect(detailButtons.first()).toBeVisible();
+
+  await detailButtons.first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+
+  // Click well outside the drawer, on the overlay backdrop.
+  await page.mouse.click(10, 10);
+  await expect(dialog).toHaveCount(0);
+  await expect(detailButtons.first()).toBeFocused();
+});
+
 test("health endpoint returns ok", async ({ request }) => {
   const res = await request.get("/api/health");
   expect(res.ok()).toBe(true);

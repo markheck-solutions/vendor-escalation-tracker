@@ -16,8 +16,20 @@ function formatUsd(value: number): string {
 
 function formatDays(count: number): string {
   const abs = Math.abs(count);
-  const label = abs === 1 ? "1 day" : `${abs} days`;
-  return count < 0 ? `${label} ago` : `in ${label}`;
+  return abs === 1 ? "1 day" : `${abs} days`;
+}
+
+function formatRelativeDays(deltaDays: number): string {
+  const label = formatDays(deltaDays);
+  if (deltaDays === 0) return "today";
+  return deltaDays > 0 ? `${label} ago` : `in ${label}`;
+}
+
+// `diffUtcDays(targetDate, now)` returns positive when the target date is in the future.
+function formatRelativeDaysFromNow(deltaDays: number): string {
+  const label = formatDays(deltaDays);
+  if (deltaDays === 0) return "today";
+  return deltaDays > 0 ? `in ${label}` : `${label} ago`;
 }
 
 function followUpAttempts(history: FollowUpEventDto[]): number {
@@ -73,11 +85,11 @@ export function buildRiskExplanation(args: {
     const exposure = formatUsd(Math.max(0, Math.trunc(args.revenueExposureUsd)));
 
     if (daysSinceTouch < 0) {
-      reasons.push(`Vendor touch is scheduled ${formatDays(daysSinceTouch)}.`);
+      reasons.push(`Vendor touch is scheduled ${formatRelativeDays(daysSinceTouch)}.`);
     } else if (daysSinceTouch === 0) {
       reasons.push("Vendor touch happened today.");
     } else {
-      reasons.push(`Most recent vendor touch was ${formatDays(daysSinceTouch)}.`);
+      reasons.push(`Most recent vendor touch was ${formatRelativeDays(daysSinceTouch)}.`);
     }
 
     if (daysUntilDue < 0) {
@@ -85,7 +97,7 @@ export function buildRiskExplanation(args: {
     } else if (daysUntilDue === 0) {
       reasons.push("Due date is today.");
     } else {
-      reasons.push(`Due date is ${formatDays(daysUntilDue)}.`);
+      reasons.push(`Due date is ${formatRelativeDaysFromNow(daysUntilDue)}.`);
     }
 
     reasons.push(`Revenue exposure is ${exposure}.`);
