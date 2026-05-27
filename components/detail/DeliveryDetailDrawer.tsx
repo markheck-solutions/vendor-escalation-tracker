@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DeliveryDetailDto, FollowUpEventDto } from "@/lib/detail/types";
 import { diffUtcDays } from "@/lib/risk/time";
+import { DraftPanel } from "@/components/draft/DraftPanel";
 
 type LoadState<T> =
   | { state: "idle" }
@@ -448,6 +449,8 @@ export function DeliveryDetailDrawer(props: {
                   </ol>
                 )}
               </section>
+
+              <DraftPanel delivery={detail} />
             </div>
           ) : null}
         </div>
