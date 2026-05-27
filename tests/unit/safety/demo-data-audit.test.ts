@@ -19,9 +19,21 @@ describe("auditDemoText", () => {
   });
 
   it("flags private or local URLs distinctly", () => {
-    const findings = auditDemoText("Check http://localhost:3000/health before proceeding.");
+    const findings = auditDemoText("Check http://127.0.0.1:3100/health before proceeding.");
     expect(findings.some((f) => f.kind === "private-url")).toBe(true);
     expect(findings.some((f) => f.kind === "url")).toBe(false);
+  });
+
+  it("flags 10/8 IPv4 private addresses only when fully specified", () => {
+    const findings = auditDemoText("Try http://10.0.0.1:8080/health as a quick check.");
+    expect(findings.some((f) => f.kind === "private-url")).toBe(true);
+    expect(findings.some((f) => f.kind === "url")).toBe(false);
+  });
+
+  it("does not treat partial 10/8 IPv4 values as private addresses", () => {
+    const findings = auditDemoText("This should not be treated as private: http://10.0.0:8080/health");
+    expect(findings.some((f) => f.kind === "private-url")).toBe(false);
+    expect(findings.some((f) => f.kind === "url")).toBe(true);
   });
 
   it("flags secret-looking values (token-like / sk-like)", () => {

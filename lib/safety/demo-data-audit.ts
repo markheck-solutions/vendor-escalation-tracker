@@ -16,7 +16,7 @@ const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_RE = /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/;
 const URL_RE = /\b(?:https?|postgres(?:ql)?|mysql|mongodb|redis):\/\/[^\s/$.?#].[^\s]*\b/i;
 const PRIVATE_URL_RE =
-  /\b(?:https?|postgres(?:ql)?|mysql|mongodb|redis):\/\/(?:[^\s/@]+(?::[^\s/@]+)?@)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|(?:10|192\.168)\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?\b/i;
+  /\b(?:https?|postgres(?:ql)?|mysql|mongodb|redis):\/\/(?:[^\s/@]+(?::[^\s/@]+)?@)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?\b/i;
 const PRIVATE_HOSTNAME_RE = /\b(?:[^\s.]+\.)+(?:local|internal)\b/i;
 const SK_RE = /\bsk-[A-Za-z0-9]{16,}\b/;
 const JWT_LIKE_RE = /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/;
