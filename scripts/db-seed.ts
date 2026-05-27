@@ -178,6 +178,8 @@ insert into public.deliveries (
 }
 
 main().catch((err) => {
-  console.error(err);
+  const message =
+    err instanceof Error ? err.message : "Seed failed with an unknown error.";
+  console.error(message);
   process.exitCode = 1;
 });
