@@ -55,6 +55,9 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
   const copyTimeoutRef = useRef<number | null>(null);
+  const requestSeqRef = useRef(0);
+  const inFlightControllerRef = useRef<AbortController | null>(null);
+  const selectedDeliveryIdRef = useRef(delivery.id);
 
   const clearCopyStateSoon = useCallback(() => {
     if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
@@ -69,6 +72,13 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
 
   // Clear stale drafts when the selected delivery changes.
   useEffect(() => {
+    selectedDeliveryIdRef.current = delivery.id;
+    // Abort any in-flight request for the prior delivery before clearing state.
+    inFlightControllerRef.current?.abort();
+    inFlightControllerRef.current = null;
+    // Bump the sequence so late responses from older requests can't set state.
+    requestSeqRef.current += 1;
+
     // Avoid calling setState synchronously within an effect body.
     // (eslint-config-next flags that as a performance footgun.)
     queueMicrotask(() => {
@@ -77,9 +87,18 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
     });
   }, [delivery.id]);
 
-  const canCopy = draft.state === "success";
+  const canCopy = draft.state === "success" && draft.deliveryId === delivery.id;
 
   const onGenerate = useCallback(async () => {
+    const requestedDeliveryId = delivery.id;
+    const seq = requestSeqRef.current + 1;
+    requestSeqRef.current = seq;
+
+    // Cancel any previous in-flight request for safety and determinism.
+    inFlightControllerRef.current?.abort();
+    const controller = new AbortController();
+    inFlightControllerRef.current = controller;
+
     setCopyState("idle");
     setDraft({ state: "loading" });
 
@@ -87,8 +106,18 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ deliveryId: delivery.id, options }),
+        body: JSON.stringify({ deliveryId: requestedDeliveryId, options }),
+        signal: controller.signal,
       });
+
+      // Ignore late responses from aborted/stale requests or prior delivery selections.
+      if (
+        controller.signal.aborted ||
+        requestSeqRef.current !== seq ||
+        selectedDeliveryIdRef.current !== requestedDeliveryId
+      ) {
+        return;
+      }
 
       if (!res.ok) {
         // Prefer safe server-provided copy when present, but fall back to controlled status-based copy.
@@ -111,6 +140,11 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
         return;
       }
 
+      if (body.draft!.deliveryId !== requestedDeliveryId) {
+        setDraft({ state: "error", message: "Draft generation returned an unexpected response." });
+        return;
+      }
+
       setDraft({
         state: "success",
         deliveryId: body.draft!.deliveryId,
@@ -118,6 +152,8 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
         draftText: body.draft!.draftText,
       });
     } catch {
+      if (controller.signal.aborted) return;
+      if (requestSeqRef.current !== seq || selectedDeliveryIdRef.current !== requestedDeliveryId) return;
       setDraft({ state: "error", message: "Draft generation failed due to a network issue." });
     }
   }, [delivery.id, options]);
