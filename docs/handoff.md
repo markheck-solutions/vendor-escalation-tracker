@@ -131,12 +131,13 @@ curl.exe -sf https://vendor-escalation-tracker.vercel.app/api/deliveries | Out-S
 Read-only posture (both should reject writes):
 
 ```powershell
-curl.exe -s -o $null -w \"%{http_code}\" -X POST http://127.0.0.1:3100/api/deliveries -H \"Content-Type: application/json\" -d \"{}\"
-curl.exe -s -o $null -w \"%{http_code}\" -X POST https://vendor-escalation-tracker.vercel.app/api/deliveries -H \"Content-Type: application/json\" -d \"{}\"
+curl.exe -s -o NUL -w '%{http_code}' -X POST http://127.0.0.1:3100/api/deliveries -H 'Content-Type: application/json' -d '{}'
+curl.exe -s -o NUL -w '%{http_code}' -X POST https://vendor-escalation-tracker.vercel.app/api/deliveries -H 'Content-Type: application/json' -d '{}'
 ```
 
 Mock draft (both should return a demo-safe response with no provider configuration):
 
 ```powershell
-curl.exe -sf -X POST https://vendor-escalation-tracker.vercel.app/api/drafts -H \"Content-Type: application/json\" -d '{\"deliveryId\":\"deliv_0001\",\"options\":{\"type\":\"escalation\",\"tone\":\"direct\"}}' | Out-String
+curl.exe -sf -X POST http://127.0.0.1:3100/api/drafts -H 'Content-Type: application/json' -d '{"deliveryId":"deliv_0001","options":{"type":"escalation","tone":"direct"}}' | Out-String
+curl.exe -sf -X POST https://vendor-escalation-tracker.vercel.app/api/drafts -H 'Content-Type: application/json' -d '{"deliveryId":"deliv_0001","options":{"type":"escalation","tone":"direct"}}' | Out-String
 ```
