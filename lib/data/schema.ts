@@ -7,7 +7,7 @@ export const deliveryStatusEnum = pgEnum("delivery_status", [
   "escalated",
 ]);
 
-export const riskLevelEnum = pgEnum("risk_level", ["low", "medium", "high", "critical"]);
+export const riskLevelEnum = pgEnum("risk_level", ["normal", "low", "medium", "high"]);
 
 export const deliveries = pgTable("deliveries", {
   id: text("id").primaryKey(),

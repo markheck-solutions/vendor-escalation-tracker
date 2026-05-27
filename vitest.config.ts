@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(repoRoot),
+      "server-only": path.resolve(repoRoot, "tests/__mocks__/server-only.ts"),
     },
   },
   test: {

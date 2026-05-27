@@ -1,4 +1,4 @@
-export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type RiskLevel = "normal" | "low" | "medium" | "high";
 
 export function scoreDeliveryRisk(args: {
   revenueExposureUsd: number;
@@ -10,5 +10,5 @@ export function scoreDeliveryRisk(args: {
 }): { level: RiskLevel; reasons: string[] } {
   // Placeholder implementation. A future slice will replace this with a fully deterministic, tested model.
   void args;
-  return { level: "low", reasons: ["Scaffold-only scoring is not implemented yet."] };
+  return { level: "normal", reasons: ["Scaffold-only scoring is not implemented yet."] };
 }
