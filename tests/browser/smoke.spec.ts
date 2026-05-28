@@ -101,6 +101,54 @@ test("dashboard state persists and detail supports back/forward navigation", asy
   await expect(page).toHaveURL(/detail=deliv_\d{4}/);
 });
 
+test("dashboard filter status shows a single reset action only when needed", async ({ page }) => {
+  await page.goto("/");
+
+  // Wait for deliveries to load so the controls are enabled.
+  await expect(page.locator("#dashboard-sort")).toBeEnabled();
+
+  // Default state: passive status only, no clear/reset actions.
+  await expect(page.getByText("No filters applied.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /clear filters/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reset$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toHaveCount(0);
+
+  // Sort-only: status should reflect non-default sorting, with a single reset action.
+  await page.locator("#dashboard-sort").selectOption("revenue");
+  await expect(page.getByText(/Sort:/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toHaveAttribute(
+    "aria-describedby",
+    "dashboard-reset-scope",
+  );
+
+  // Filter-only: active filter labels show, with a single reset action (no duplicates).
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await expect(page.locator("#dashboard-sort")).toHaveValue("priority");
+
+  await page.locator("#dashboard-filter-risk").selectOption("high");
+  await expect(page.getByText("Risk: high")).toBeVisible();
+  await expect(page.getByRole("button", { name: /clear filters/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reset$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toBeVisible();
+
+  // Empty results state follows the same single-action rule.
+  // There are no "high risk" deliveries in "on-track" status in the deterministic seed set.
+  await page.locator("#dashboard-filter-status").selectOption("on-track");
+  await expect(page.getByText("No deliveries match your filters.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /clear filters/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reset$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toBeVisible();
+
+  // Reset returns the queue to its default view, and the reset action disappears again.
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await expect(page.locator("#dashboard-sort")).toHaveValue("priority");
+  await expect(page.locator("#dashboard-filter-risk")).toHaveValue("all");
+  await expect(page.locator("#dashboard-filter-status")).toHaveValue("all");
+  await expect(page.getByText("No filters applied.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset view", exact: true })).toHaveCount(0);
+});
+
 test("switching records clears stale draft state", async ({ page }) => {
   await page.goto("/");
 

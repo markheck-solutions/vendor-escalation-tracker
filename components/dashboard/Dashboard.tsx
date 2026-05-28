@@ -26,6 +26,13 @@ type LoadState<T> =
 
 const EMPTY_DELIVERIES: DeliveryDto[] = [];
 
+const SORT_LABELS: Record<DeliverySortKey, string> = {
+  priority: "Priority (risk)",
+  due_date: "Due date (soonest)",
+  revenue: "Revenue exposure (high)",
+  last_touch: "Vendor touch (oldest)",
+};
+
 function formatUsdCompact(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -394,13 +401,10 @@ export function Dashboard() {
     return labels;
   }, [filters]);
 
-  const clearFilters = useCallback(() => {
-    setFilters(DEFAULT_DELIVERY_FILTERS);
-    updateUrlState(
-      { ...currentUrlState, filters: DEFAULT_DELIVERY_FILTERS },
-      "replace",
-    );
-  }, [currentUrlState, updateUrlState]);
+  const hasActiveFilters = activeFilterLabels.length > 0;
+  const hasNonDefaultSort = sortKey !== "priority";
+  const isDefaultQueueState = !hasActiveFilters && !hasNonDefaultSort;
+  const showResetInHeader = !isDefaultQueueState;
 
   const resetAllControls = useCallback(() => {
     setSortKey("priority");
@@ -510,6 +514,9 @@ export function Dashboard() {
           </div>
 
           <div className="flex flex-col gap-3 sm:items-end">
+            <p id="dashboard-reset-scope" className="sr-only">
+              Resets all dashboard filters and restores the default priority sort.
+            </p>
             <div className="text-xs text-zinc-500 dark:text-zinc-500" aria-live="polite">
               {deliveriesAvailable ? (
                 <span className="tabular-nums">
@@ -692,9 +699,16 @@ export function Dashboard() {
 
             {deliveriesAvailable ? (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                {activeFilterLabels.length ? (
+                {isDefaultQueueState ? (
+                  <span className="text-zinc-500 dark:text-zinc-500">No filters applied.</span>
+                ) : (
                   <div className="flex flex-wrap items-center gap-1 text-zinc-600 dark:text-zinc-400">
                     <span className="font-medium text-zinc-700 dark:text-zinc-200">Active:</span>
+                    {hasNonDefaultSort ? (
+                      <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                        Sort: {SORT_LABELS[sortKey]}
+                      </span>
+                    ) : null}
                     {activeFilterLabels.map((label) => (
                       <span
                         key={label}
@@ -704,28 +718,18 @@ export function Dashboard() {
                       </span>
                     ))}
                   </div>
-                ) : (
-                  <span className="text-zinc-500 dark:text-zinc-500">No filters applied.</span>
                 )}
 
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    disabled={activeFilterLabels.length === 0}
-                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
-                  >
-                    Clear filters
-                  </button>
+                {showResetInHeader ? (
                   <button
                     type="button"
                     onClick={resetAllControls}
-                    disabled={activeFilterLabels.length === 0 && sortKey === "priority"}
-                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                    aria-describedby="dashboard-reset-scope"
+                    className="ml-auto h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
                   >
-                    Reset
+                    Reset view
                   </button>
-                </div>
+                ) : null}
               </div>
             ) : deliveriesLoading ? (
               <p className="text-xs text-zinc-500 dark:text-zinc-500" aria-live="polite">
@@ -751,24 +755,11 @@ export function Dashboard() {
                   No deliveries match your filters.
                 </p>
                 <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                  Try widening the criteria, or clear filters to return to the full queue.
+                  Try widening the criteria, or reset the view to return to the full queue.
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
-                  >
-                    Clear filters
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetAllControls}
-                    className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
-                  >
-                    Reset
-                  </button>
-                </div>
+                <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-500">
+                  Use <span className="font-medium">Reset view</span> above to return to the default queue.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
