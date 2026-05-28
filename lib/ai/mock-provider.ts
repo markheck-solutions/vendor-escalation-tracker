@@ -82,7 +82,7 @@ function buildTypeSection(args: {
       return [
         "Action needed escalation:",
         "",
-        `We need ownership and timing on this issue to avoid avoidable churn.`,
+        `We need ownership and timing on this issue to prevent rework and protect the delivery plan.`,
         confirm,
         "- named owner and backup contact on your side",
         "- recovery plan plus updated ETA",
