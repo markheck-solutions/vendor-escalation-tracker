@@ -87,10 +87,18 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
     });
   }, [delivery.id]);
 
-  const canCopy = draft.state === "success" && draft.deliveryId === delivery.id;
+  const isDraftForCurrentDelivery = draft.state === "success" && draft.deliveryId === delivery.id;
+  const isDraftForCurrentOptions =
+    draft.state === "success" &&
+    draft.options.type === options.type &&
+    draft.options.tone === options.tone;
+  const isDraftStale = isDraftForCurrentDelivery && !isDraftForCurrentOptions;
+
+  const canCopy = isDraftForCurrentDelivery && isDraftForCurrentOptions;
 
   const onGenerate = useCallback(async () => {
     const requestedDeliveryId = delivery.id;
+    const requestedOptions = options;
     const seq = requestSeqRef.current + 1;
     requestSeqRef.current = seq;
 
@@ -106,7 +114,7 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ deliveryId: requestedDeliveryId, options }),
+        body: JSON.stringify({ deliveryId: requestedDeliveryId, options: requestedOptions }),
         signal: controller.signal,
       });
 
@@ -141,6 +149,14 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
       }
 
       if (body.draft!.deliveryId !== requestedDeliveryId) {
+        setDraft({ state: "error", message: "Draft generation returned an unexpected response." });
+        return;
+      }
+
+      if (
+        body.draft!.options.type !== requestedOptions.type ||
+        body.draft!.options.tone !== requestedOptions.tone
+      ) {
         setDraft({ state: "error", message: "Draft generation returned an unexpected response." });
         return;
       }
@@ -192,6 +208,12 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
     return `${delivery.customerAlias} · ${delivery.vendorAlias} · ${delivery.serviceAlias}`;
   }, [delivery.customerAlias, delivery.serviceAlias, delivery.vendorAlias]);
 
+  const copyAriaLabel = canCopy
+    ? "Copy the generated draft"
+    : isDraftStale
+      ? "Copy draft (disabled until a fresh draft is generated for the current type and tone)"
+      : "Copy draft (disabled until a draft is generated)";
+
   return (
     <section
       aria-label="Follow-up draft generator"
@@ -224,7 +246,7 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
             onClick={onCopy}
             disabled={!canCopy}
             className="h-[44px] rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
-            aria-label={canCopy ? "Copy the generated draft" : "Copy draft (disabled until a draft is generated)"}
+            aria-label={copyAriaLabel}
           >
             Copy
           </button>
@@ -240,12 +262,15 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
           <label htmlFor="draft-type" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Draft type
           </label>
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-500">
+            Applied on the next Generate action.
+          </p>
           <select
             id="draft-type"
             value={options.type}
             onChange={(e) => setOptions((prev) => ({ ...prev, type: e.target.value as DraftType }))}
             disabled={draft.state === "loading"}
-            className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+            className="mt-2 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
           >
             {(["status-request", "escalation", "executive-update"] as const).map((t) => (
               <option key={t} value={t}>
@@ -259,12 +284,15 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
           <label htmlFor="draft-tone" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Tone
           </label>
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-500">
+            Applied on the next Generate action.
+          </p>
           <select
             id="draft-tone"
             value={options.tone}
             onChange={(e) => setOptions((prev) => ({ ...prev, tone: e.target.value as DraftTone }))}
             disabled={draft.state === "loading"}
-            className="mt-1 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+            className="mt-2 h-[44px] w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
           >
             {(["collaborative", "direct", "urgent"] as const).map((t) => (
               <option key={t} value={t}>
@@ -318,6 +346,16 @@ export function DraftPanel(props: { delivery: DeliveryDetailDto }) {
                 Delivery ID: {draft.deliveryId}
               </p>
             </div>
+
+            {isDraftStale ? (
+              <p
+                className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                role="status"
+                aria-live="polite"
+              >
+                Options changed. Generate again to refresh this draft before copying.
+              </p>
+            ) : null}
 
             <pre
               className="mt-3 max-h-72 overflow-auto rounded-md bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-900 dark:bg-zinc-900/40 dark:text-zinc-100"

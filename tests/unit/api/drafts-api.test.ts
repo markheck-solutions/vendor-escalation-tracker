@@ -116,12 +116,21 @@ describe("/api/drafts", () => {
     expect(urgent.status).toBe(200);
     const urgentBody = await urgent.json();
 
+    // Type differences should be obvious in the body, not just the subject line.
     expect(statusBody.draft?.draftText).toContain("Subject: Quick status check");
-    expect(escalationBody.draft?.draftText).toContain("Subject: Escalation needed");
+    expect(statusBody.draft?.draftText).toContain("updated ETA");
+    expect(statusBody.draft?.draftText).toContain("next concrete step");
 
-    // Tone affects greeting wording in mock mode.
+    expect(escalationBody.draft?.draftText).toContain("Subject: Escalation needed");
+    expect(escalationBody.draft?.draftText).toMatch(/ownership|owner/i);
+    expect(escalationBody.draft?.draftText).toMatch(/action needed|escalat/i);
+
+    // Tone differences should affect action language beyond only the greeting.
     expect(statusBody.draft?.draftText).toContain("\nHello,\n");
+    expect(statusBody.draft?.draftText).toMatch(/please provide|please confirm/i);
+
     expect(urgentBody.draft?.draftText).toContain("\nHi,\n");
+    expect(urgentBody.draft?.draftText).toMatch(/urgent|today|eod/i);
   });
 
   it("rejects malformed JSON with controlled 400 JSON", async () => {

@@ -160,4 +160,92 @@ describe("DraftPanel", () => {
       true,
     );
   });
+
+  it("marks the prior draft as stale and disables Copy when draft options change", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            draft: {
+              deliveryId: "deliv_0001",
+              options: { type: "status-request", tone: "collaborative" },
+              draftText: "Draft text for deliv_0001.",
+            },
+          },
+        }),
+      ),
+    );
+
+    render(<DraftPanel delivery={delivery("deliv_0001")} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await screen.findByLabelText("Generated draft text");
+
+    const copy = screen.getByRole("button", { name: /Copy/ }) as HTMLButtonElement;
+    expect(copy.disabled).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Draft type"), { target: { value: "escalation" } });
+
+    // Prior draft must be treated as stale once the options no longer match.
+    expect(screen.getByText(/Options changed/i)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Copy/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("snapshots type and tone per Generate click and ignores late responses for older options", async () => {
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            draft: {
+              deliveryId: "deliv_0001",
+              options: { type: "status-request", tone: "collaborative" },
+              draftText: "First draft text (status/collaborative).",
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            draft: {
+              deliveryId: "deliv_0001",
+              options: { type: "escalation", tone: "urgent" },
+              draftText: "Second draft text (escalation/urgent).",
+            },
+          },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DraftPanel delivery={delivery("deliv_0001")} />);
+
+    // First generate uses the default options.
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await screen.findByLabelText("Generated draft text");
+
+    // Change options before generating again.
+    fireEvent.change(screen.getByLabelText("Draft type"), { target: { value: "escalation" } });
+    fireEvent.change(screen.getByLabelText("Tone"), { target: { value: "urgent" } });
+
+    // Second request should use the latest options.
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    const secondBody = (fetchMock.mock.calls[1]?.[1] as { body?: string } | undefined)?.body ?? "";
+    expect(secondBody).toContain('"type":"escalation"');
+    expect(secondBody).toContain('"tone":"urgent"');
+
+    // Second response wins and should be reflected in the label and body.
+    await screen.findByText((content) => content.includes("Generated draft (Escalation · Urgent)"));
+    expect(screen.getByLabelText("Generated draft text").textContent).toContain(
+      "Second draft text (escalation/urgent).",
+    );
+  });
 });
