@@ -1,0 +1,72 @@
+analysis:
+  repo: C:\SoftwareFactory\01-projects\vendor-escalation-tracker
+  app_structure:
+    monorepo: false
+    apps:
+      - name: web
+        type: nextjs-web
+        path_patterns:
+          - app/**
+          - components/**
+          - lib/**
+          - public/**
+  environments:
+    local:
+      url: http://127.0.0.1:3100
+    production:
+      url: https://vendor-escalation-tracker.vercel.app
+  auth:
+    method: none
+    provider: none
+  detected_integrations:
+    - Supabase/Postgres
+    - Vercel
+    - Factory Droid
+    - optional OpenAI-compatible provider
+answers:
+  default_target: local
+  category_1_default_target_confirmed: true
+  environment_restrictions:
+    - Production/live demo is read-only and must remain mock AI only.
+    - Do not create users or persistent production data.
+  personas:
+    - name: public_viewer
+      description: Unauthenticated read-only portfolio viewer.
+      can_do:
+        - View dashboard data
+        - Filter and sort the queue
+        - Open delivery details
+        - Generate and copy deterministic mock drafts
+      cannot_do:
+        - Log in
+        - Edit, save, delete, or send data
+        - Configure paid/private AI providers
+  category_2_personas_confirmed: true
+  critical_flows:
+    - dashboard_load
+    - queue_filter_sort_reset
+    - delivery_detail_drawer
+    - mock_draft_generate_copy
+    - read_only_api_safety
+  category_3_critical_flows_confirmed: true
+  integrations_scope: mock_read_only_only
+  category_4_integrations_confirmed: true
+  cleanup:
+    auto_cleanup: false
+    strategy: none
+    instructions: QA does not create users or persistent app data; Droid handles browser URL/state reset between flows.
+  category_5_cleanup_confirmed: true
+  nontechnical_user_preference: Droid should choose safe defaults, avoid technical questionnaires where possible, and handle cleanup/verification directly.
+  imagemagick:
+    requested: install_with_winget
+    installed: true
+    path: C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe
+    note: magick.exe was installed, but a new terminal may be needed before it appears on PATH.
+  category_6_imagemagick_confirmed: true
+  github_action:
+    generate: true
+    required: false
+    strategy: local_dev_server
+  category_7_github_action_confirmed: true
+  failure_learning: auto_commit
+  category_8_failure_learning_confirmed: true
