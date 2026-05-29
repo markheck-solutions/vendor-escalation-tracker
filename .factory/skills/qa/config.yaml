@@ -1,0 +1,134 @@
+project: Vendor Escalation Tracker
+imagemagick: true
+imagemagick_local_path_hint: C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe
+user_preferences:
+  - Use safe detected defaults instead of asking technical setup questions when possible.
+  - Droid handles browser-state cleanup and verification directly.
+
+environments:
+  local:
+    url: http://127.0.0.1:3100
+    restrictions:
+      - Use branch-local code started by the QA workflow.
+      - Use mock AI and deterministic seed/fallback data unless explicitly testing Supabase wiring.
+      - Do not create users; the app has no authentication.
+  production:
+    url: https://vendor-escalation-tracker.vercel.app
+    restrictions:
+      - Read-only smoke checks only.
+      - Keep AI_PROVIDER=mock; never configure paid/private AI for public demo QA.
+      - Do not attempt writes, saves, deletes, or sends except negative tests that verify writes are rejected.
+  preview:
+    url: provided-by-ci-if-vercel-git-preview-is-added-later
+    behaves_like: local
+    restrictions:
+      - Treat Vercel preview deployments as development/local-style environments.
+      - Use mock/read-only flows; do not assume production-only data or credentials.
+
+default_target: local
+
+auth:
+  method: none
+  provider: none
+  notes:
+    - No login, signup, sessions, or authenticated roles exist in this app.
+    - QA should not ask for credentials or create test users.
+
+personas:
+  - name: public_viewer
+    description: Unauthenticated read-only portfolio viewer evaluating the demo.
+    email: null
+    credentials_source: none
+    secret_name: null
+    test_focus:
+      - dashboard triage
+      - queue filtering and sorting
+      - delivery detail review
+      - mock draft generation and copy
+      - read-only safety posture
+    cannot_do:
+      - log in
+      - edit deliveries
+      - save drafts
+      - send messages
+      - configure private AI providers
+
+apps:
+  web:
+    path_patterns:
+      - app/**
+      - components/**
+      - lib/**
+      - public/**
+      - tests/browser/**
+      - tests/unit/**
+      - package.json
+      - package-lock.json
+      - next.config.ts
+      - playwright.config.ts
+      - vitest.config.ts
+      - tsconfig.json
+      - eslint.config.mjs
+    skill: qa-web
+    test_tool: agent-browser
+    build_command: npm run build
+    dev_command: npm run dev -- --hostname 127.0.0.1 --port 3100
+    healthcheck_url: http://127.0.0.1:3100/api/health
+
+feature_flags:
+  provider: custom-env
+  dashboard_url: null
+  flags:
+    NEXT_PUBLIC_DEMO_MODE:
+      expected_for_public_demo: "true"
+      notes: Shows the Demo Mode badge.
+    AI_PROVIDER:
+      expected_for_public_demo: mock
+      notes: Selects mock vs optional OpenAI-compatible draft provider.
+  how_to_override: Set environment variables before starting the Next.js dev server; do not expose server-only variables with NEXT_PUBLIC_ names.
+
+integrations:
+  database:
+    provider: Supabase/Postgres via pg and drizzle-orm
+    qa_mode: mock-read-only
+    notes:
+      - If DATABASE_URL is absent, the app uses deterministic seeded repository data.
+      - Normal QA should not require database secrets.
+      - Database write checks should be negative API tests only.
+  ai:
+    provider: mock by default; optional OpenAI-compatible backend fetch
+    qa_mode: mock-only
+    notes:
+      - Public and CI QA should use mock deterministic drafts.
+      - Do not test private AI provider unless explicitly requested.
+  deployment:
+    provider: Vercel
+    qa_mode: local-dev-server-for-prs
+    notes:
+      - No committed Vercel preview workflow is present.
+      - PR QA starts the local dev server from the checked-out branch.
+  factory:
+    provider: Factory Droid
+    qa_mode: ci-droid-exec
+    required_secret: FACTORY_API_KEY
+
+cleanup:
+  auto_cleanup: false
+  strategy: none
+  instructions: QA creates no users and no persistent app data. Droid resets browser URL/state between flows and avoids relying on clipboard contents between tests.
+
+github_actions:
+  generate_workflow: true
+  workflow_file: .github/workflows/qa.yml
+  required_check: false
+  branch_strategy: local-dev-server
+  permissions:
+    contents: write
+    pull-requests: write
+    issues: write
+  secrets:
+    - name: FACTORY_API_KEY
+      purpose: Authenticate Droid in GitHub Actions.
+      source: Factory account API key; already used by the wiki refresh workflow.
+
+failure_learning: auto_commit
